@@ -16,12 +16,15 @@
 from setuptools import find_packages
 from setuptools import setup
 
+from zuul.openstack.common import setup as common_setup
+
 setup(name='zuul',
       version='1.0',
       description="Trunk gating system",
       license='Apache License (2.0)',
       author='Hewlett-Packard Development Company, L.P.',
       author_email='openstack@lists.launchpad.net',
+      cmdclass=common_setup.get_cmdclass(),
       url='http://launchpad.net/zuul',
       scripts=['zuul-server'],
       include_package_data=True,
