@@ -1,0 +1,82 @@
+pipelines:
+  - name: check
+    manager: IndependentPipelineManager
+    trigger:
+      - event: patchset-uploaded
+    success:
+      verified: 1
+    failure:
+      verified: -1
+
+  - name: post
+    manager: IndependentPipelineManager
+    trigger:
+      - event: ref-updated
+        ref: ^(?!refs/).*$
+
+  - name: gate
+    manager: DependentPipelineManager
+    trigger:
+      - event: comment-added
+        approval: 
+          - approved: 1
+    success:
+      verified: 2
+      submit: true
+    failure:
+      verified: -2
+    start:
+      verified: 0
+
+  - name: unused
+    manager: IndependentPipelineManager
+    trigger:
+      - event: comment-added
+        approval: 
+          - approved: 1
+
+jobs:
+  - name: ^.*-merge$
+    failure-message: Unable to merge change
+    hold-following-changes: true
+
+projects:
+  - name: org/project
+    check:
+      - project-merge:
+        - project-test1
+        - project-test2
+    gate:
+      - project-merge:
+        - project-test1
+        - project-test2
+    post:
+      - project-post
+
+  - name: org/project1
+    check:
+      - project1-merge:
+        - project1-test1
+        - project1-test2
+        - project1-project2-integration
+    gate:
+      - project1-merge:
+        - project1-test1
+        - project1-test2
+        - project1-project2-integration
+    post:
+      - project1-post
+
+  - name: org/project2
+    check:
+      - project2-merge:
+        - project2-test1
+        - project2-test2
+        - project1-project2-integration
+    gate:
+      - project2-merge:
+        - project2-test1
+        - project2-test2
+        - project1-project2-integration
+    post:
+      - project2-post

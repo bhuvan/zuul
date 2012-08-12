@@ -54,7 +54,11 @@ class JenkinsCallback(threading.Thread):
             self.jenkins_endpoint(request)
             return ['Zuul good.']
         elif request.path == '/status':
-            ret = self.jenkins.sched.formatStatusHTML()
+            try:
+                ret = self.jenkins.sched.formatStatusHTML()
+            except:
+                self.log.exception("Exception formatting status:")
+                raise
             return [ret]
         else:
             return ['Zuul good.']
@@ -91,10 +95,18 @@ class JenkinsCleanup(threading.Thread):
     def __init__(self, jenkins):
         threading.Thread.__init__(self)
         self.jenkins = jenkins
+        self.wake_event = threading.Event()
+        self._stopped = False
+
+    def stop(self):
+        self._stopped = True
+        self.wake_event.set()
 
     def run(self):
         while True:
-            time.sleep(180)
+            self.wake_event.wait(180)
+            if self._stopped:
+                return
             try:
                 self.jenkins.lookForLostBuilds()
             except:
@@ -191,19 +203,25 @@ class Jenkins(object):
         self.cleanup_thread = JenkinsCleanup(self)
         self.cleanup_thread.start()
 
+    def stop(self):
+        self.cleanup_thread.stop()
+        self.cleanup_thread.join()
+
     def launch(self, job, change, dependent_changes=[]):
         self.log.info("Launch job %s for change %s with dependent changes %s" %
                       (job, change, dependent_changes))
+        dependent_changes = dependent_changes[:]
+        dependent_changes.reverse()
         uuid = str(uuid1())
         params = dict(UUID=uuid,
                       GERRIT_PROJECT=change.project.name)
-        if change.refspec:
+        if hasattr(change, 'refspec'):
             changes_str = '^'.join(
                 ['%s:%s:%s' % (c.project.name, c.branch, c.refspec)
                  for c in dependent_changes + [change]])
             params['GERRIT_BRANCH'] = change.branch
             params['GERRIT_CHANGES'] = changes_str
-        if change.ref:
+        if hasattr(change, 'ref'):
             params['GERRIT_REFNAME'] = change.ref
             params['GERRIT_OLDREV'] = change.oldrev
             params['GERRIT_NEWREV'] = change.newrev
